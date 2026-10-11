@@ -1,6 +1,6 @@
 {
   "name": "@kvidai/plugin-sdk",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "SDK for building KVIDAI plugins: definePlugin and ctx types, a mock platform for tests, React slot components and a project generator.",
   "license": "MIT",
   "keywords": [
@@ -53,6 +53,9 @@
     "clean": "rm -rf dist",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "esbuild": "^0.25.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

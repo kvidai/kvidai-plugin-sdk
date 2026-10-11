@@ -11,6 +11,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { initPlugin } from './init';
+import { PLUGIN_API_VERSION } from './compat';
+import { verifyProject } from './build';
 import { runCli } from './cli';
 
 let root: string;
@@ -49,6 +51,13 @@ describe('initPlugin', () => {
     expect(pkg.exports['./types']).toBe('./types.ts');
     expect(pkg.devDependencies['@kvidai/plugin-sdk']).toMatch(/^\^\d+\.\d+\.\d+$/);
     expect(read('daily-bonus', 'server/src/index.ts')).toContain("id: 'daily-bonus'");
+  });
+
+  it('fills sdkVersion with the plugin API version, not the package version, so a patch release of the SDK cannot make a new project fail verify', () => {
+    initPlugin({ id: 'api-range', dir: path.join(root, 'api-range') });
+    const manifest = JSON.parse(read('api-range', 'package.json')).kvidai;
+    expect(manifest.sdkVersion).toBe(`^${PLUGIN_API_VERSION}`);
+    expect(verifyProject(path.join(root, 'api-range'))).toEqual([]);
   });
 
   it('leaves no unreplaced {{placeholders}} in any file', () => {
@@ -121,32 +130,32 @@ describe('runCli', () => {
     };
   };
 
-  it('init <id> creates ./<id> under the working directory', () => {
+  it('init <id> creates ./<id> under the working directory', async () => {
     const { io: i, out } = io();
-    expect(runCli(['init', 'daily-bonus'], i)).toBe(0);
+    expect(await runCli(['init', 'daily-bonus'], i)).toBe(0);
     expect(existsSync(path.join(root, 'daily-bonus', 'package.json'))).toBe(true);
     expect(out.join('\n')).toMatch(/daily-bonus/);
   });
 
-  it('init <id> --dir <path> --workspace', () => {
+  it('init <id> --dir <path> --workspace', async () => {
     const { io: i } = io();
-    expect(runCli(['init', 'x', '--dir', 'plugins/x', '--workspace'], i)).toBe(0);
+    expect(await runCli(['init', 'x', '--dir', 'plugins/x', '--workspace'], i)).toBe(0);
     expect(
       JSON.parse(read('plugins', 'x', 'package.json')).devDependencies['@kvidai/plugin-sdk']
     ).toBe('workspace:*');
   });
 
-  it('prints usage and exits 1 without a command, with an unknown command, or without an id', () => {
+  it('prints usage and exits 1 without a command, with an unknown command, or without an id', async () => {
     for (const argv of [[], ['wat'], ['init']]) {
       const { io: i, err } = io();
-      expect(runCli(argv, i)).toBe(1);
+      expect(await runCli(argv, i)).toBe(1);
       expect(err.join('\n')).toMatch(/Usage/);
     }
   });
 
-  it('reports a failure (bad id) on stderr and exits 1 instead of throwing', () => {
+  it('reports a failure (bad id) on stderr and exits 1 instead of throwing', async () => {
     const { io: i, err } = io();
-    expect(runCli(['init', 'Bad_Id'], i)).toBe(1);
+    expect(await runCli(['init', 'Bad_Id'], i)).toBe(1);
     expect(err.join('\n')).toMatch(/plugin id/);
   });
 });

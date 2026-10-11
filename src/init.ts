@@ -4,6 +4,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { PLUGIN_API_VERSION } from './compat';
 import { PLUGIN_ID_PATTERN } from './index';
 
 const TEMPLATE_DIR = path.resolve(__dirname, '../templates/plugin');
@@ -42,7 +43,8 @@ export function initPlugin({ id, dir, workspace = false }: InitOptions): string[
   const version = sdkVersion();
   const values: Record<string, string> = {
     id,
-    sdkRange: `^${version}`,
+    // sdkVersion is the plugin API the project is built for, which is not the package version (a patch release does not change the API)
+    sdkRange: `^${PLUGIN_API_VERSION}`,
     sdkDependency: workspace ? 'workspace:*' : `^${version}`,
   };
 

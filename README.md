@@ -86,7 +86,7 @@ export default definePluginUi({
 | `@kvidai/plugin-sdk/contract`   | 계약 시나리오                                 |
 | `@kvidai/plugin-sdk/ui`         | 화면 훅·UI 부품 타입·`definePluginUi` (React) |
 | `@kvidai/plugin-sdk/ui-testing` | `renderSlot` (React, react-dom)               |
-| `kvidai-plugin` (bin)           | `init <id>`                                   |
+| `kvidai-plugin` (bin)           | `init <id>`, `verify`, `build`, `dev`, `link` |
 
 플러그인은 사내 코드 리뷰를 통과한 뒤에 설치된다. 플러그인은 플랫폼과 같은 프로세스에서 돌며 샌드박스가 아니다.
 
