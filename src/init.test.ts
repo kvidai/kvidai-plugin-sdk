@@ -34,8 +34,9 @@ describe('initPlugin', () => {
         '.gitignore',
         'README.md',
         'package.json',
-        'src/server/index.test.ts',
-        'src/server/index.ts',
+        'server/src/index.test.ts',
+        'server/src/index.ts',
+        'types.ts',
         'tsconfig.json',
         'vitest.config.ts',
       ].sort()
@@ -44,9 +45,10 @@ describe('initPlugin', () => {
     expect(pkg.name).toBe('@kvidai-plugin/daily-bonus');
     expect(pkg.kvidai.id).toBe('daily-bonus');
     expect(pkg.kvidai.permissions).toEqual(['credits.grant', 'routes']);
-    expect(pkg.exports['./server']).toBe('./src/server/index.ts');
+    expect(pkg.exports['./server']).toBe('./server/src/index.ts');
+    expect(pkg.exports['./types']).toBe('./types.ts');
     expect(pkg.devDependencies['@kvidai/plugin-sdk']).toMatch(/^\^\d+\.\d+\.\d+$/);
-    expect(read('daily-bonus', 'src/server/index.ts')).toContain("id: 'daily-bonus'");
+    expect(read('daily-bonus', 'server/src/index.ts')).toContain("id: 'daily-bonus'");
   });
 
   it('leaves no unreplaced {{placeholders}} in any file', () => {
@@ -62,7 +64,16 @@ describe('initPlugin', () => {
 
   it("pins its own vitest config, so a parent directory's config (the monorepo root has one) is never picked up", () => {
     initPlugin({ id: 'x', dir: path.join(root, 'x') });
-    expect(read('x', 'vitest.config.ts')).toContain("include: ['src/**/*.test.ts']");
+    expect(read('x', 'vitest.config.ts')).toContain("include: ['server/**/*.test.ts'");
+  });
+
+  it('declares every type package its tsconfig lists, so `npm run typecheck` works outside the monorepo (which hoists @types/node from its root)', () => {
+    initPlugin({ id: 'daily-bonus', dir: path.join(root, 'daily-bonus') });
+    const tsconfig = JSON.parse(read('daily-bonus', 'tsconfig.json'));
+    const pkg = JSON.parse(read('daily-bonus', 'package.json'));
+    for (const name of tsconfig.compilerOptions.types as string[]) {
+      expect(pkg.devDependencies).toHaveProperty(`@types/${name}`);
+    }
   });
 
   it('writes a dotfile .gitignore (npm would drop a file with that name from the package)', () => {

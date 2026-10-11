@@ -11,12 +11,17 @@
  */
 import {
   PLUGIN_EVENTS,
+  PLUGIN_FILTERS,
   type GrantResult,
   type PluginCtx,
+  type PluginDefinition,
   type PluginEventName,
+  type PluginMigration,
   type RouteHandler,
 } from './index';
 import type { ContractManifest, HarnessFactory } from './contract';
+import { createMockDb } from './mock-db';
+import { describeMigrations } from './schema';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_KEY_LENGTH = 191;
@@ -30,6 +35,16 @@ export type MockOptions = {
   config?: Record<string, unknown>;
   /** Known user ids. When given, granting to another id throws and a request as another id is a 401; when omitted every id is accepted. */
   users?: string[];
+  /** The plugin's `migrations`: applied once, in order, before the plugin's setup. Needs the `db` permission. */
+  migrations?: PluginMigration[];
+  /**
+   * What `ctx.strapi` and `ctx.knex` return. The mock has no Strapi, so without these they throw: give your plugin the fake it needs
+   * (a plain object with the few services it calls), or run it against the real core image.
+   */
+  strapi?: unknown;
+  knex?: unknown;
+  /** How long a filter may take before it is skipped (fail-open). Default 2000. */
+  filterTimeoutMs?: number;
 };
 
 type Route = {
@@ -58,6 +73,9 @@ export function createMockCtx(options: MockOptions) {
   const kv = new Map<string, { value: unknown; expiresAt: number | null }>();
   const routes: Route[] = [];
   const handlers: Array<{ event: string; fn: (payload: any) => Promise<void> | void }> = [];
+
+  const filters: Array<{ name: string; fn: (value: any, info: any) => unknown }> = [];
+  const filterTimeoutMs = options.filterTimeoutMs ?? 2000;
 
   const now = () => new Date(nowMs);
   const kvKey = (userId: string, key: string) => `${userId}\u0000${key}`;
@@ -148,10 +166,36 @@ export function createMockCtx(options: MockOptions) {
       routes.push({ method, path, auth: opts?.auth ?? 'user', handler });
     };
 
+  // Plugin-owned tables: the migrations describe them, the mock keeps the rows in memory (see ./mock-db.ts).
+  if (options.migrations?.length && !has('db'))
+    throw fail('missing permission db (the plugin has migrations)');
+  const tables = describeMigrations(options.migrations ?? []);
+  const db = createMockDb({ tables, fail, allowed: () => has('db') });
+
   const ctx: PluginCtx = {
     now,
     credits,
     store,
+    db,
+    get strapi() {
+      if (options.strapi === undefined)
+        throw fail(
+          'ctx.strapi is not available in the mock: pass a fake, createMockCtx({ manifest, strapi: { ... } }), or test against the real core image'
+        );
+      return options.strapi as never;
+    },
+    get knex() {
+      if (options.knex === undefined)
+        throw fail(
+          'ctx.knex is not available in the mock: pass a fake, createMockCtx({ manifest, knex }), or test against the real core image'
+        );
+      return options.knex as never;
+    },
+    filter(name, fn) {
+      if (!(PLUGIN_FILTERS as readonly string[]).includes(name))
+        throw fail(`unknown filter ${JSON.stringify(name)}`);
+      filters.push({ name, fn: fn as (value: any, info: any) => unknown });
+    },
     on(event: PluginEventName, handler) {
       if (!(PLUGIN_EVENTS as readonly string[]).includes(event))
         throw fail(`unknown event ${JSON.stringify(event)}`);
@@ -185,6 +229,33 @@ export function createMockCtx(options: MockOptions) {
             }
           })
       );
+    },
+    /** What core does at a filter point: hands `value` through this plugin's filters. Fail-open, like the host. */
+    async applyFilter(name: string, value: unknown, info?: unknown): Promise<unknown> {
+      if (!enabled) return value;
+      let current = value;
+      for (const filter of filters.filter((f) => f.name === name)) {
+        try {
+          const next = await withTimeout(
+            Promise.resolve(filter.fn(current, info)),
+            filterTimeoutMs
+          );
+          if (next === TIMED_OUT) {
+            logs.error.push(
+              tag(`${name} filter timed out after ${filterTimeoutMs}ms and was skipped`)
+            );
+          } else if (next === undefined) {
+            logs.error.push(tag(`${name} filter returned nothing and was skipped`));
+          } else {
+            current = next;
+          }
+        } catch (error) {
+          logs.error.push(
+            tag(`${name} filter failed and was skipped: ${(error as Error).message}`)
+          );
+        }
+      }
+      return current;
     },
     /** Calls a registered route like an HTTP request. `userId` stands for a valid login of that user; omit it for an anonymous request. */
     async call(
@@ -224,12 +295,75 @@ export function createMockCtx(options: MockOptions) {
   };
 }
 
+const TIMED_OUT = Symbol('timed out');
+
+/** Resolves with the promise's value, or with TIMED_OUT once `ms` have passed (the promise itself is left running). */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | typeof TIMED_OUT> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<typeof TIMED_OUT>((resolve) => {
+    timer = setTimeout(() => resolve(TIMED_OUT), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Loads a plugin into the mock the way the host does: merge `config.default` with the settings you pass and run the validator, apply
+ * `migrations`, then `register`, then `bootstrap`. Returns the mock plus `destroy()` for the plugin's shutdown.
+ *
+ *   const mock = await loadMockPlugin(plugin, { manifest: pkg.kvidai });
+ *   const res = await mock.call('POST', '/check-in', { userId: '7' });
+ */
+export async function loadMockPlugin(
+  plugin: PluginDefinition,
+  options: Omit<MockOptions, 'migrations' | 'pluginId'>
+) {
+  const config = { ...(plugin.config?.default ?? {}), ...(options.config ?? {}) };
+  plugin.config?.validator?.(config);
+  const mock = createMockCtx({
+    ...options,
+    pluginId: plugin.id,
+    migrations: plugin.migrations,
+    config,
+  });
+  await plugin.register?.(mock.ctx);
+  await (plugin.bootstrap ?? plugin.setup)?.(mock.ctx);
+  return { ...mock, destroy: async () => void (await plugin.destroy?.(mock.ctx)) };
+}
+
 /** Adapts the mock to the shared contract scenarios (see ./contract.ts). */
-export const createMockHarness: HarnessFactory = async ({ manifest, setup, now }) => {
-  const mock = createMockCtx({ manifest, now, users: ['7', '8'] });
-  await setup?.(mock.ctx);
+export const createMockHarness: HarnessFactory = async ({
+  manifest,
+  migrations,
+  config,
+  register,
+  destroy,
+  setup,
+  now,
+  filterTimeoutMs,
+  destroyTimeoutMs,
+}) => {
+  const mock = await loadMockPlugin(
+    { id: 'mock-plugin', version: '1.0.0', config, migrations, register, setup },
+    {
+      manifest,
+      now,
+      users: ['7', '8'],
+      // the contract only checks that full control is there; the shape of Strapi is not part of it
+      strapi: {},
+      knex: () => ({}),
+      filterTimeoutMs,
+    }
+  );
   return {
     ctx: mock.ctx,
+    applyFilter: (name, value, info) => mock.applyFilter(name, value, info),
+    destroy: async () => {
+      try {
+        await withTimeout(Promise.resolve(destroy?.(mock.ctx)), destroyTimeoutMs);
+      } catch (error) {
+        mock.logs.error.push(`[plugin:mock-plugin] destroy failed: ${(error as Error).message}`);
+      }
+    },
     call: (method, path, opts) => mock.call(method, path, opts),
     emit: (event, payload) => mock.emit(event, payload),
     setNow: (date) => mock.setNow(date),

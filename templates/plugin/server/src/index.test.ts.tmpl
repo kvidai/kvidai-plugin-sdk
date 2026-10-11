@@ -1,15 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createMockCtx } from '@kvidai/plugin-sdk/testing';
+import { loadMockPlugin } from '@kvidai/plugin-sdk/testing';
 import pkg from '../../package.json';
 import plugin from './index';
 
-// createMockCtx stands in for the platform: no core, database or server needed. Pass the manifest from package.json
-// so the test fails if the plugin uses something it did not declare.
-const setup = async () => {
-  const mock = createMockCtx({ manifest: pkg.kvidai, pluginId: pkg.kvidai.id });
-  await plugin.setup(mock.ctx);
-  return mock;
-};
+// loadMockPlugin stands in for the platform: no core, database or server needed. It runs your plugin the way the host does
+// (config, migrations, register, bootstrap). Pass the manifest from package.json so the test fails if the plugin uses something it did not declare.
+const setup = () => loadMockPlugin(plugin, { manifest: pkg.kvidai });
 
 describe('{{id}}', () => {
   it('pays once a day, however often it is claimed', async () => {

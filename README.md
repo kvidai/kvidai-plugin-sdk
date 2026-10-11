@@ -18,6 +18,8 @@ GitHub Packages (같은 이름 `@kvidai/plugin-sdk`): 공개 패키지여도 Git
 //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 ```
 
+> **API 전체는 설치한 패키지 안의 문서**: `node_modules/@kvidai/plugin-sdk/docs/plugin-api.md`(서버 쪽: 라이프사이클 `register`/`bootstrap`/`destroy`, `ctx` 전체, 필터, 자기 테이블, Strapi 와의 이름 대응)와 `docs/plugin-web.md`(화면 쪽: Next.js 페이지와 슬롯).
+
 ## 새 플러그인 만들기
 
 ```bash

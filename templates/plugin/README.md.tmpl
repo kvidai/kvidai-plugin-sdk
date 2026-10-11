@@ -1,6 +1,14 @@
 # {{id}}
 
-A KVIDAI plugin. You only need `@kvidai/plugin-sdk`; the platform's source is not required.
+A KVIDAI plugin. You only need `@kvidai/plugin-sdk`; the platform's source is not required. The layout follows Strapi plugins:
+
+```
+{{id}}/
+├── package.json         # name @kvidai-plugin/{{id}}, exports, and the "kvidai" manifest (what the plugin may use)
+├── types.ts             # types both halves share (route responses)
+├── server/src/index.ts  # the Strapi side: definePlugin (register / bootstrap / destroy, routes, tables, filters)
+└── web/src/             # optional, the Next.js side: ui/index.tsx (slots) and app/** (pages)
+```
 
 ```bash
 pnpm install     # or npm install
@@ -8,10 +16,14 @@ pnpm test        # runs against the SDK's mock of the platform
 pnpm typecheck
 ```
 
-- `src/server/index.ts` -- the plugin (`definePlugin`). `ctx` gives you `credits`, `store`, `on(event)`, `routes`, `config`, `log`, `now`.
-- `package.json` `"kvidai"` -- what the plugin may use. Declare a permission before you use it, or `setup` fails:
-  `credits.grant`, `store`, `routes`, `events:<name>` (`user.created`, `credit.used`). `budget` caps how many credits it can hand out.
-- Tests use `createMockCtx` from `@kvidai/plugin-sdk/testing`. The platform's behaviour is pinned by shared contract tests, so a plugin that
+- `server/src/index.ts` -- the server half. `ctx` gives you `credits`, `store`, `db`, `on(event)`, `filter(name)`, `routes`, `config`, `log`, `now`,
+  and `strapi` / `knex` for full control. Lifecycle: `register`, `bootstrap`, `destroy`, plus `config: { default, validator }` and `migrations`.
+- `package.json` `"kvidai"` -- what the convenience APIs may do. Declare a permission before you use one, or `bootstrap` fails:
+  `credits.grant`, `store`, `routes`, `db`, `events:<name>` (`user.created`, `credit.used`). `budget` caps how many credits it can hand out.
+- Tests use `loadMockPlugin` from `@kvidai/plugin-sdk/testing`. The platform's behaviour is pinned by shared contract tests, so a plugin that
   passes here behaves the same when it is installed.
+- The whole API is in `node_modules/@kvidai/plugin-sdk/docs/plugin-api.md`.
+- To add a web half, create `web/src/ui/index.tsx` (`definePluginUi`) and/or Next.js pages in `web/src/app/` (`page.tsx`, `layout.tsx`, ...) and
+  export them in package.json: `"./web/ui": "./web/src/ui/index.tsx"`, `"./web/app/*": "./web/src/app/*.tsx"`.
 
 Submit the plugin for code review; it is installed only after review.

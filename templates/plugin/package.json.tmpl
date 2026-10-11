@@ -4,7 +4,8 @@
   "description": "{{id}} plugin for KVIDAI",
   "type": "module",
   "exports": {
-    "./server": "./src/server/index.ts"
+    "./server": "./server/src/index.ts",
+    "./types": "./types.ts"
   },
   "kvidai": {
     "id": "{{id}}",
@@ -18,6 +19,7 @@
   },
   "devDependencies": {
     "@kvidai/plugin-sdk": "{{sdkDependency}}",
+    "@types/node": "^20.11.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   }

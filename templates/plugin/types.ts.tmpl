@@ -1,0 +1,5 @@
+// Types both halves of the plugin share: the server returns them from its routes, a web half (web/src) reads them. Keeping them here makes a
+// change that one side did not follow fail the build.
+
+/** POST /api/plugins/{{id}}/claim */
+export type ClaimResult = { granted: true } | { granted: false; reason: 'duplicate' | 'budget' };

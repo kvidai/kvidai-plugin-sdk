@@ -1,13 +1,14 @@
 import { definePlugin } from '@kvidai/plugin-sdk';
+import type { ClaimResult } from '../../types';
 
 // Everything a plugin can do goes through `ctx`. It only works for what package.json "kvidai.permissions" declares.
 export default definePlugin({
   id: '{{id}}',
   version: '0.1.0',
-  setup(ctx) {
+  bootstrap(ctx) {
     // Example: a once-a-day reward. Replace this with your feature.
     // POST /api/plugins/{{id}}/claim -- a logged-in user's request; `user` is never null on a default (auth: 'user') route.
-    ctx.routes.post('/claim', async ({ user }) => {
+    ctx.routes.post('/claim', async ({ user }): Promise<ClaimResult> => {
       const day = ctx.now().toISOString().slice(0, 10);
       // The key makes it idempotent: the same key is never granted twice, so a double click or a second tab pays once.
       return ctx.credits.grant(user!.id, { key: `day:${day}`, credits: 5 });
