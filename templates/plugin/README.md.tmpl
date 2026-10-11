@@ -1,0 +1,17 @@
+# {{id}}
+
+A KVIDAI plugin. You only need `@kvidai/plugin-sdk`; the platform's source is not required.
+
+```bash
+pnpm install     # or npm install
+pnpm test        # runs against the SDK's mock of the platform
+pnpm typecheck
+```
+
+- `src/server/index.ts` -- the plugin (`definePlugin`). `ctx` gives you `credits`, `store`, `on(event)`, `routes`, `config`, `log`, `now`.
+- `package.json` `"kvidai"` -- what the plugin may use. Declare a permission before you use it, or `setup` fails:
+  `credits.grant`, `store`, `routes`, `events:<name>` (`user.created`, `credit.used`). `budget` caps how many credits it can hand out.
+- Tests use `createMockCtx` from `@kvidai/plugin-sdk/testing`. The platform's behaviour is pinned by shared contract tests, so a plugin that
+  passes here behaves the same when it is installed.
+
+Submit the plugin for code review; it is installed only after review.

@@ -1,0 +1,29 @@
+import { describe, expect, it } from 'vitest';
+import { createMockCtx } from '@kvidai/plugin-sdk/testing';
+import pkg from '../../package.json';
+import plugin from './index';
+
+// createMockCtx stands in for the platform: no core, database or server needed. Pass the manifest from package.json
+// so the test fails if the plugin uses something it did not declare.
+const setup = async () => {
+  const mock = createMockCtx({ manifest: pkg.kvidai, pluginId: pkg.kvidai.id });
+  await plugin.setup(mock.ctx);
+  return mock;
+};
+
+describe('{{id}}', () => {
+  it('pays once a day, however often it is claimed', async () => {
+    const mock = await setup();
+    expect((await mock.call('POST', '/claim', { userId: '1' })).body).toEqual({ granted: true });
+    expect((await mock.call('POST', '/claim', { userId: '1' })).body).toEqual({ granted: false, reason: 'duplicate' });
+
+    mock.advance(24 * 60 * 60 * 1000);
+    expect((await mock.call('POST', '/claim', { userId: '1' })).body).toEqual({ granted: true });
+    expect(mock.grants).toHaveLength(2);
+  });
+
+  it('needs a logged-in user', async () => {
+    const mock = await setup();
+    expect((await mock.call('POST', '/claim')).status).toBe(401);
+  });
+});

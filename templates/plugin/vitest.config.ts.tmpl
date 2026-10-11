@@ -1,0 +1,6 @@
+import { defineConfig } from 'vitest/config';
+
+// Pinned on purpose: without its own config, vitest walks up the directory tree and would use a parent project's config.
+export default defineConfig({
+  test: { include: ['src/**/*.test.ts'] },
+});

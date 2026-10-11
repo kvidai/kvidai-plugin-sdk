@@ -1,0 +1,24 @@
+{
+  "name": "@kvidai-plugin/{{id}}",
+  "version": "0.1.0",
+  "description": "{{id}} plugin for KVIDAI",
+  "type": "module",
+  "exports": {
+    "./server": "./src/server/index.ts"
+  },
+  "kvidai": {
+    "id": "{{id}}",
+    "sdkVersion": "{{sdkRange}}",
+    "permissions": ["credits.grant", "routes"],
+    "budget": { "dailyCredits": 1000, "perGrantMax": 100 }
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@kvidai/plugin-sdk": "{{sdkDependency}}",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}
